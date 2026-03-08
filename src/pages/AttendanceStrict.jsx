@@ -26,36 +26,71 @@ export default function AttendanceStrict() {
   const [webcamReady, setWebcamReady] = useState(false)
 
   useEffect(() => {
-    navigator.geolocation.getCurrentPosition(p => {
-      const coords = { lat: p.coords.latitude, lng: p.coords.longitude }
-      setPos(coords)
-    })
+    // 1. Request Camera and Location permissions on mount
+    requestPermissions()
+    
+    // 2. Continuous location tracking for field activity
+    const watchId = navigator.geolocation.watchPosition(
+      p => {
+        const coords = { lat: p.coords.latitude, lng: p.coords.longitude }
+        setPos(coords)
+        logLocation(coords) // Save for manager monitoring
+      },
+      err => console.error("Location error:", err),
+      { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+    )
+    return () => navigator.geolocation.clearWatch(watchId)
   }, [])
 
-  useEffect(() => {
-    if (!pos) return
-    const dist = distanceMeters(pos, assigned)
-    setCanCheckIn(!strict || dist <= 100)
-  }, [pos, assigned, strict])
+  async function requestPermissions() {
+    try {
+      await navigator.mediaDevices.getUserMedia({ video: true })
+      setWebcamReady(true)
+    } catch (err) {
+      alert("Please allow Camera access for Attendance.")
+    }
+  }
 
-  function captureSelfie() {
-    const img = webcamRef.current?.getScreenshot()
-    setSelfie(img || null)
+  async function logLocation(coords) {
+    if (supabase && coords) {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        await supabase.from("location_logs").insert({
+          user_id: user.id,
+          lat: coords.lat,
+          lng: coords.lng
+        })
+      }
+    }
   }
 
   async function checkIn() {
+    if (!pos || !selfie) {
+      alert("Location or Selfie missing!")
+      return
+    }
     const now = new Date()
     const late = now.getHours() > 9 || (now.getHours() === 9 && now.getMinutes() > 45)
-    setStatus(late ? "pending, late" : "pending")
+    setStatus("Submitting...")
+    
     if (supabase) {
-      await supabase.from("attendance").insert({
+      const { data: { user } } = await supabase.auth.getUser()
+      const { error } = await supabase.from("attendance").insert({
+        user_id: user.id,
         timestamp: now.toISOString(),
-        lat: pos?.lat ?? null,
-        lng: pos?.lng ?? null,
+        lat: pos.lat,
+        lng: pos.lng,
         is_late: late,
-        status: "pending",
-        selfie_base64: selfie ?? null
+        status: "pending", // Always pending for Manager approval
+        selfie_base64: selfie
       })
+      
+      if (!error) {
+        setStatus(late ? "Check-in successful (Late - Pending Approval)" : "Check-in successful (Pending Approval)")
+        setSelfie(null)
+      } else {
+        setStatus("Error: " + error.message)
+      }
     }
   }
 
