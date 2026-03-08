@@ -18,29 +18,37 @@ function distanceMeters(a, b) {
 export default function AttendanceStrict() {
   const webcamRef = useRef(null)
   const [pos, setPos] = useState(null)
-  const [assigned] = useState({ lat: 0, lng: 0 })
-  const [strict] = useState(true)
-  const [canCheckIn, setCanCheckIn] = useState(false)
   const [status, setStatus] = useState("")
   const [selfie, setSelfie] = useState(null)
   const [webcamReady, setWebcamReady] = useState(false)
+  const [profile, setProfile] = useState(null)
+  const [canCheckIn, setCanCheckIn] = useState(false)
+  const [distance, setDistance] = useState(null)
 
   useEffect(() => {
-    // 1. Request Camera and Location permissions on mount
+    fetchProfile()
     requestPermissions()
     
-    // 2. Continuous location tracking for field activity
     const watchId = navigator.geolocation.watchPosition(
       p => {
         const coords = { lat: p.coords.latitude, lng: p.coords.longitude }
         setPos(coords)
-        logLocation(coords) // Save for manager monitoring
+        logLocation(coords)
       },
       err => console.error("Location error:", err),
       { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
     )
     return () => navigator.geolocation.clearWatch(watchId)
   }, [])
+
+  async function fetchProfile() {
+    if (!supabase) return
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) {
+      const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single()
+      setProfile(data)
+    }
+  }
 
   async function requestPermissions() {
     try {
@@ -64,6 +72,11 @@ export default function AttendanceStrict() {
     }
   }
 
+  function captureSelfie() {
+    const img = webcamRef.current?.getScreenshot()
+    setSelfie(img || null)
+  }
+
   async function checkIn() {
     if (!pos || !selfie) {
       alert("Location or Selfie missing!")
@@ -81,7 +94,7 @@ export default function AttendanceStrict() {
         lat: pos.lat,
         lng: pos.lng,
         is_late: late,
-        status: "pending", // Always pending for Manager approval
+        status: "pending", 
         selfie_base64: selfie
       })
       
@@ -94,42 +107,111 @@ export default function AttendanceStrict() {
     }
   }
 
+  useEffect(() => {
+    if (!pos || !profile) return
+    
+    if (profile.attendance_mode === 'flexible') {
+      setCanCheckIn(true)
+      return
+    }
+
+    const assigned = { lat: profile.assigned_lat || 0, lng: profile.assigned_lng || 0 }
+    const dist = distanceMeters(pos, assigned)
+    setDistance(dist)
+    setCanCheckIn(dist <= 100) 
+  }, [pos, profile])
+
+  const mapsLink = profile?.assigned_lat ? `https://www.google.com/maps?q=${profile.assigned_lat},${profile.assigned_lng}` : null
+
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-semibold text-navy">Strict Attendance</h1>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="rounded-lg border bg-white p-4">
-          <div className="mb-2 text-sm text-gray-600">Live Camera</div>
+    <div className="space-y-6 p-4">
+      <h1 className="text-2xl font-bold text-navy">Attendance Portal</h1>
+      
+      {profile?.attendance_mode === 'strict' && (
+        <div className="bg-blue-50 p-4 rounded-lg border border-blue-200 mb-4">
+          <p className="text-sm text-blue-800 font-semibold flex items-center gap-2">
+            📍 Strict Mode Active (100m Geofence)
+          </p>
+          {mapsLink && (
+            <a href={mapsLink} target="_blank" rel="noreferrer" className="text-xs text-blue-600 underline mt-1 block">
+              View assigned location on Google Maps
+            </a>
+          )}
+          {distance !== null && (
+            <p className="text-xs mt-1">Current distance: {Math.round(distance)} meters from target.</p>
+          )}
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="rounded-xl border bg-white p-4 shadow-sm">
+          <div className="mb-3 text-sm font-bold text-gray-700 uppercase tracking-wider">Live Camera</div>
           <Webcam
             ref={webcamRef}
             audio={false}
             screenshotFormat="image/jpeg"
-            className="w-full rounded-md"
+            className="w-full rounded-xl border-4 border-gray-100"
             onUserMedia={() => setWebcamReady(true)}
           />
-          <div className="mt-3 flex gap-3">
+          <div className="mt-4 flex items-center gap-4">
             <button
               type="button"
               onClick={captureSelfie}
-              className="rounded-md bg-gold text-white px-3 py-2"
+              className="flex-1 rounded-lg bg-gold text-white px-4 py-3 font-bold shadow-md hover:bg-yellow-600 transition-all"
             >
               Capture Selfie
             </button>
-            {selfie && <img src={selfie} alt="selfie" className="h-16 w-16 rounded-md object-cover border" />}
+            {selfie && (
+              <div className="relative">
+                <img src={selfie} alt="selfie" className="h-16 w-16 rounded-lg object-cover border-2 border-gold shadow-sm" />
+                <button onClick={() => setSelfie(null)} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 text-[10px]">X</button>
+              </div>
+            )}
           </div>
         </div>
-        <div className="rounded-lg border bg-white p-4">
-          <div className="mb-2 text-sm text-gray-600">Location</div>
-          <div className="text-sm">Current: {pos ? `${pos.lat.toFixed(5)}, ${pos.lng.toFixed(5)}` : "-"}</div>
-          <div className="text-sm">Assigned: {`${assigned.lat}, ${assigned.lng}`}</div>
-          <button
-            onClick={checkIn}
-            disabled={!canCheckIn || !webcamReady}
-            className={`mt-4 rounded-md px-3 py-2 ${canCheckIn && webcamReady ? "bg-navy text-white" : "bg-gray-300 text-gray-600 cursor-not-allowed"}`}
-          >
-            Check-in
-          </button>
-          <div className="mt-2 text-sm text-gray-700">{status}</div>
+
+        <div className="rounded-xl border bg-white p-6 shadow-sm flex flex-col justify-between">
+          <div>
+            <div className="mb-4 text-sm font-bold text-gray-700 uppercase tracking-wider">Status & Location</div>
+            <div className="space-y-3">
+              <div className="flex justify-between text-sm py-2 border-b border-gray-50">
+                <span className="text-gray-500">GPS Signal:</span>
+                <span className={pos ? "text-green-600 font-bold" : "text-red-500 font-bold"}>
+                  {pos ? "Connected" : "Searching..."}
+                </span>
+              </div>
+              <div className="flex justify-between text-sm py-2 border-b border-gray-50">
+                <span className="text-gray-500">Camera:</span>
+                <span className={webcamReady ? "text-green-600 font-bold" : "text-red-500 font-bold"}>
+                  {webcamReady ? "Ready" : "Not Ready"}
+                </span>
+              </div>
+              <div className="flex justify-between text-sm py-2 border-b border-gray-50">
+                <span className="text-gray-500">Selfie:</span>
+                <span className={selfie ? "text-green-600 font-bold" : "text-red-500 font-bold"}>
+                  {selfie ? "Captured" : "Required"}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-8">
+            <button
+              onClick={checkIn}
+              disabled={!canCheckIn || !webcamReady || !selfie || !pos}
+              className={`w-full rounded-xl py-4 font-black text-lg shadow-lg transition-all ${
+                canCheckIn && webcamReady && selfie && pos
+                ? "bg-navy text-white hover:scale-[1.02] active:scale-95" 
+                : "bg-gray-200 text-gray-400 cursor-not-allowed"
+              }`}
+            >
+              {canCheckIn ? "CHECK-IN NOW" : "OUT OF RANGE"}
+            </button>
+            <p className="mt-3 text-[10px] text-center text-gray-400 italic">
+              *Attendance will be sent to Manager for approval.
+            </p>
+            <div className="mt-4 text-center text-sm font-bold text-navy">{status}</div>
+          </div>
         </div>
       </div>
     </div>
