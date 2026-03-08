@@ -4,20 +4,21 @@ import { Globe } from "lucide-react"
 
 function Logo() {
   return (
-    <div className="flex flex-col items-center gap-2 px-4 py-6 border-b border-gray-100">
+    <div className="flex flex-col items-center gap-3 px-4 py-8 border-b border-gray-100 bg-gray-50/50">
       <img 
         src="https://bprlpwlbwcgxqajskmxx.supabase.co/storage/v1/object/public/assets/vtc-logo.png" 
         alt="VTC Lifts" 
-        className="h-16 w-auto object-contain"
+        className="h-16 w-auto object-contain drop-shadow-sm"
         onError={(e) => e.target.src = "https://via.placeholder.com/150?text=VTC+Lifts"}
       />
       <div className="text-center">
-        <div className="text-navy font-bold text-sm leading-tight">VTC Lifts & Escalators</div>
+        <div className="text-navy font-bold text-xs leading-tight tracking-tight">VTC Lifts & Escalators Pvt Ltd</div>
+        <div className="text-[9px] text-gray-500 font-bold uppercase tracking-widest mt-1">Value to Customer</div>
         <a 
           href="https://vtclifts.co.in" 
           target="_blank" 
           rel="noreferrer"
-          className="text-[10px] text-gold flex items-center justify-center gap-1 hover:underline"
+          className="text-[9px] text-gold flex items-center justify-center gap-1 hover:underline mt-2 font-medium"
         >
           <Globe size={10} /> vtclifts.co.in
         </a>

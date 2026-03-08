@@ -59,10 +59,14 @@ export default function Login() {
           <img 
             src="https://bprlpwlbwcgxqajskmxx.supabase.co/storage/v1/object/public/assets/vtc-logo.png" 
             alt="VTC Lifts" 
-            className="h-20 mx-auto mb-4"
+            className="h-24 mx-auto mb-4 object-contain"
+            onError={(e) => e.target.src = "https://via.placeholder.com/150?text=VTC+Lifts"}
           />
-          <h1 className="text-2xl font-black text-navy tracking-tight">VTC ERP SYSTEM</h1>
-          <p className="text-gray-600 text-xs font-medium uppercase tracking-widest mt-1">Value to Customer</p>
+          <h1 className="text-xl font-bold text-navy leading-tight">VTC Lifts & Escalators Pvt Ltd</h1>
+          <div className="flex flex-col items-center mt-2">
+            <span className="h-0.5 w-12 bg-gold mb-1"></span>
+            <p className="text-gray-600 text-[10px] font-bold uppercase tracking-[0.2em]">Value to Customer</p>
+          </div>
         </div>
         
         <form onSubmit={signIn} className="space-y-4">
