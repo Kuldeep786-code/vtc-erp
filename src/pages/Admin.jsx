@@ -75,7 +75,27 @@ export default function Admin() {
     }
   }
 
+  async function fetchUsers() {
+    if (!supabase) return
+    try {
+      const { data, error } = await supabase.from('profiles').select('*')
+      if (error) throw error
+      setUsers(data || [])
+    } catch (err) {
+      console.error('Error fetching users:', err.message)
+      if (err.message.includes('500')) {
+        setStatus("Server Error: Database policies are circular. Please run the SQL fix.")
       }
+    }
+  }
+
+  async function updateUserConfig(id, field, value) {
+    if (!supabase) return
+    const { error } = await supabase.from('profiles').update({ [field]: value }).eq('id', id)
+    if (error) {
+        console.error(`Error updating ${field}:`, error.message)
+    } else {
+        fetchUsers()
     }
   }
 

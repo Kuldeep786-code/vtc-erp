@@ -9,7 +9,7 @@ function Logo() {
         src="https://bprlpwlbwcgxqajskmxx.supabase.co/storage/v1/object/public/assets/vtc-logo.png" 
         alt="VTC Lifts" 
         className="h-16 w-auto object-contain drop-shadow-sm"
-        onError={(e) => e.target.src = "https://via.placeholder.com/150?text=VTC+Lifts"}
+        onError={(e) => e.target.src = "https://placehold.co/150?text=VTC+Lifts"}
       />
       <div className="text-center">
         <div className="text-navy font-bold text-xs leading-tight tracking-tight">VTC Lifts & Escalators Pvt Ltd</div>

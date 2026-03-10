@@ -60,7 +60,7 @@ export default function Login() {
             src="https://bprlpwlbwcgxqajskmxx.supabase.co/storage/v1/object/public/assets/vtc-logo.png" 
             alt="VTC Lifts" 
             className="h-24 mx-auto mb-4 object-contain"
-            onError={(e) => e.target.src = "https://via.placeholder.com/150?text=VTC+Lifts"}
+            onError={(e) => e.target.src = "https://placehold.co/150?text=VTC+Lifts"}
           />
           <h1 className="text-xl font-bold text-navy leading-tight">VTC Lifts & Escalators Pvt Ltd</h1>
           <div className="flex flex-col items-center mt-2">

@@ -90,16 +90,26 @@ export default function AttendanceStrict() {
       try {
         const { data: { user } } = await supabase.auth.getUser();
         
-        // 1. Upload Selfie to Storage
+        // 1. Upload Selfie to Storage (Browser-compatible way)
         const fileExt = 'jpg';
         const fileName = `${user.id}-${now.toISOString()}.${fileExt}`;
         const filePath = `${user.id}/${fileName}`;
         
-        const base64 = selfie.split(',')[1];
+        // Convert base64 to Blob
+        const base64Data = selfie.split(',')[1];
+        const byteCharacters = atob(base64Data);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+            byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        const blob = new Blob([byteArray], { type: 'image/jpeg' });
+
         const { error: uploadError } = await supabase.storage
           .from('selfies')
-          .upload(filePath, Buffer.from(base64, 'base64'), {
-            contentType: 'image/jpeg'
+          .upload(filePath, blob, {
+            contentType: 'image/jpeg',
+            upsert: true
           });
 
         if (uploadError) throw uploadError;
