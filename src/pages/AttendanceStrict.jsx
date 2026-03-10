@@ -230,6 +230,7 @@ export default function AttendanceStrict() {
 
     if (!profile.assigned_lat || !profile.assigned_lng) {
         console.error("CRITICAL: Assigned location (lat/lng) is not set for this user in 'strict' mode.");
+        alert("ATTENTION: Your assigned work location is not set. Please contact your Admin/Manager to set your Latitude and Longitude.");
     }
 
     const dist = distanceMeters(pos, assigned)
