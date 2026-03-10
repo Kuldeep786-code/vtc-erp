@@ -25,21 +25,51 @@ export default function AttendanceStrict() {
   const [canCheckIn, setCanCheckIn] = useState(false)
   const [distance, setDistance] = useState(null)
 
+  const [todayAttendance, setTodayAttendance] = useState(null)
+
   useEffect(() => {
     fetchProfile()
+    fetchTodayAttendance()
     requestPermissions()
-    
-    const watchId = navigator.geolocation.watchPosition(
-      p => {
-        const coords = { lat: p.coords.latitude, lng: p.coords.longitude }
-        setPos(coords)
-        logLocation(coords)
-      },
-      err => console.error("Location error:", err),
-      { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
-    )
-    return () => navigator.geolocation.clearWatch(watchId)
+    // ... existing watchPosition logic
   }, [])
+
+  async function fetchTodayAttendance() {
+    if (!supabase) return
+    const { data: { user } } = await supabase.auth.getUser()
+    const today = new Date().toISOString().split('T')[0]
+    const { data } = await supabase.from('attendance')
+      .select('*')
+      .eq('profile_id', user.id)
+      .gte('check_in_time', today)
+      .single()
+    setTodayAttendance(data)
+  }
+
+  async function checkOut() {
+    if (!pos || !selfie) {
+        alert("Location or Selfie missing for Check-out!");
+        return;
+    }
+    setStatus("Checking out...");
+    const now = new Date();
+    const checkInTime = new Date(todayAttendance.check_in_time);
+    const diffMs = now - checkInTime;
+    const diffHrs = (diffMs / (1000 * 60 * 60)).toFixed(2);
+
+    const { error } = await supabase.from('attendance')
+      .update({ 
+        check_out_time: now.toISOString(),
+        total_hours: diffHrs,
+        check_out_selfie_url: await uploadSelfie('checkout') // Helper function needed
+      })
+      .eq('id', todayAttendance.id);
+
+    if (!error) {
+      setStatus(`Check-out successful. Total Hours: ${diffHrs}. ${diffHrs < 9 ? 'Half-day marked.' : ''}`);
+      fetchTodayAttendance();
+    }
+  }
 
   async function fetchProfile() {
     if (!supabase) return
