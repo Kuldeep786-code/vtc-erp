@@ -28,7 +28,9 @@ export default function Admin() {
       fetchUsers()
       fetchManagers()
     }
-    if (activeTab === 'live') fetchLiveLocation()
+    if (activeTab === 'live') {
+      fetchLocationHistory()
+    }
   }, [activeTab])
 
   async function fetchManagers() {
@@ -73,67 +75,24 @@ export default function Admin() {
     }
   }
 
-  async function fetchUsers() {
-    if (!supabase) return
-    try {
-      const { data, error } = await supabase.from('profiles').select('*')
-      if (error) throw error
-      setUsers(data || [])
-    } catch (err) {
-      console.error('Error fetching users:', err.message)
-      // If 500 error, we show a better error message
-      if (err.message.includes('500')) {
-        setStatus("Server Error: Database policies are circular. Please run the SQL fix.")
       }
     }
   }
 
-  async function fetchManagers() {
-    if (!supabase) return
-    const { data } = await supabase.from('profiles').select('id, full_name').eq('role', 'manager')
-    setManagers(data || [])
-  }
-
-  async function handleAddUser(e) {
-    e.preventDefault()
-    if (!supabase) return
-    setStatus('Processing...')
-
-    try {
-      // 1. Create user in auth (In a real app, you'd use a service role or invite)
-      // For this MVP, we create an account. Note: This requires Supabase Auth settings to allow this.
-      const { data: { user }, error: signUpError } = await supabase.auth.signUp({
-        email: newUser.email,
-        password: newUser.password,
-        options: {
-          data: {
-            full_name: newUser.full_name,
-            role: newUser.role
-          }
-        }
-      })
-
-      if (signUpError) throw signUpError
-
-      if (user) {
-        // 2. Profile entry should be auto-created by trigger, but we update it just in case
-        const { error: profileError } = await supabase.from('profiles').update({
-          full_name: newUser.full_name,
-          role: newUser.role,
-          attendance_mode: 'strict'
-        }).eq('id', user.id)
-
-        if (profileError) throw profileError
-
-        setStatus('User added! Note: User must verify email to login.')
-        setNewUser({ email: '', password: '', role: 'employee', full_name: '' })
-        setShowAddUser(false)
-        fetchUsers()
-      }
-    } catch (err) {
-      setStatus(`Error: ${err.message}`)
+  async function fetchLocationHistory() {
+    if (!supabase) return;
+    // For now, we just fetch the last 20 logs. Roadmap view will be a separate component.
+    const { data, error } = await supabase.from('location_history').select('*, profiles(full_name)').order('recorded_at', { ascending: false }).limit(50);
+    if (error) {
+      console.error("Error fetching location history:", error);
+      setStatus("Could not load location history.");
+      setMonitoring([]);
+    } else {
+      setMonitoring(data || []);
     }
   }
+
+
 
   const userColumns = [
     { header: "Name", accessor: "full_name" },
@@ -265,9 +224,9 @@ export default function Admin() {
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
           <h2 className="text-lg font-bold text-navy mb-4">Field Executive Live Tracking</h2>
           <div className="space-y-3">
-            {monitoring.map(m => (
+            {monitoring.length > 0 ? monitoring.map(m => (
               <div key={m.id} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg text-xs">
-                <span className="font-bold text-navy">{m.profiles?.full_name}</span>
+                <span className="font-bold text-navy">{m.profiles?.full_name || 'Unknown User'}</span>
                 <span className="text-gray-400">{new Date(m.recorded_at).toLocaleTimeString()}</span>
                 <a 
                   href={`https://www.google.com/maps?q=${m.lat},${m.lng}`} 
@@ -275,10 +234,10 @@ export default function Admin() {
                   rel="noreferrer"
                   className="bg-gold text-white px-2 py-1 rounded"
                 >
-                  View Map
+                  View on Map
                 </a>
               </div>
-            ))}
+            )) : <p className="text-center text-gray-500 py-4">No location data recorded yet.</p>}
           </div>
         </div>
       )}
