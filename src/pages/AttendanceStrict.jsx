@@ -198,6 +198,7 @@ export default function AttendanceStrict() {
 
         setStatus(late ? "Check-in successful (Late - Pending Approval)" : "Check-in successful (Pending Approval)");
         setSelfie(null);
+        fetchTodayAttendance(); // Refresh state to show Check-out button
       } catch (error) {
         console.error("Check-in failed:", error);
         // The user-facing error now correctly references the column name from the DB
@@ -317,25 +318,46 @@ export default function AttendanceStrict() {
           </div>
 
           <div className="mt-8">
-            <button
-              onClick={checkIn}
-              disabled={!canCheckIn || !webcamReady || !selfie || !pos}
-              className={`w-full rounded-xl py-4 font-black text-lg shadow-lg transition-all ${
-                canCheckIn && webcamReady && selfie && pos
-                ? "bg-navy text-white hover:scale-[1.02] active:scale-95" 
-                : "bg-gray-200 text-gray-400 cursor-not-allowed"
-              }`}
-            >
-              {canCheckIn || profile?.attendance_mode === 'flexible' ? "CHECK-IN NOW" : "OUT OF RANGE"}
-            </button>
-            {profile?.attendance_mode === 'strict' && !canCheckIn && mapsLink && (
-                 <div className="mt-2 text-center">
-                    <a href={mapsLink} target="_blank" rel="noreferrer" className="text-sm text-blue-600 underline">
-                        You are out of range. View your assigned location on Google Maps.
-                    </a>
-                    <p className="text-xs mt-1 text-gray-500">Current distance: {Math.round(distance)} meters from target.</p>
-                 </div>
+            {todayAttendance && !todayAttendance.check_out_time ? (
+                /* CHECK-OUT BUTTON */
+                <button
+                    onClick={checkOut}
+                    disabled={!webcamReady || !selfie || !pos}
+                    className={`w-full rounded-xl py-4 font-black text-lg shadow-lg transition-all ${
+                        webcamReady && selfie && pos
+                        ? "bg-red-600 text-white hover:scale-[1.02] active:scale-95" 
+                        : "bg-gray-200 text-gray-400 cursor-not-allowed"
+                    }`}
+                >
+                    CHECK-OUT NOW
+                </button>
+            ) : (
+                /* CHECK-IN BUTTON */
+                <>
+                    <button
+                        onClick={checkIn}
+                        disabled={todayAttendance?.check_out_time || !canCheckIn || !webcamReady || !selfie || !pos}
+                        className={`w-full rounded-xl py-4 font-black text-lg shadow-lg transition-all ${
+                            !todayAttendance?.check_out_time && canCheckIn && webcamReady && selfie && pos
+                            ? "bg-navy text-white hover:scale-[1.02] active:scale-95" 
+                            : "bg-gray-200 text-gray-400 cursor-not-allowed"
+                        }`}
+                    >
+                        {todayAttendance?.check_out_time 
+                            ? "ALREADY ATTENDED" 
+                            : (canCheckIn || profile?.attendance_mode === 'flexible' ? "CHECK-IN NOW" : "OUT OF RANGE")}
+                    </button>
+                    {profile?.attendance_mode === 'strict' && !canCheckIn && !todayAttendance && mapsLink && (
+                        <div className="mt-2 text-center">
+                            <a href={mapsLink} target="_blank" rel="noreferrer" className="text-sm text-blue-600 underline">
+                                You are out of range. View your assigned location on Google Maps.
+                            </a>
+                            <p className="text-xs mt-1 text-gray-500">Current distance: {Math.round(distance)} meters from target.</p>
+                        </div>
+                    )}
+                </>
             )}
+            
             <p className="mt-3 text-[10px] text-center text-gray-400 italic">
               *Attendance will be sent to Manager for approval.
             </p>

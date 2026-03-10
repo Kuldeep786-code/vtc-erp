@@ -110,14 +110,17 @@ export default function Admin() {
   async function fetchUsers() {
     if (!supabase) return
     try {
+      console.log("Fetching all users...");
       const { data, error } = await supabase.from('profiles').select('*')
-      if (error) throw error
+      if (error) {
+          console.error("Supabase Error:", error.message);
+          throw error;
+      }
+      console.log("Users loaded:", data?.length);
       setUsers(data || [])
     } catch (err) {
       console.error('Error fetching users:', err.message)
-      if (err.message.includes('500')) {
-        setStatus("Server Error: Database policies are circular. Please run the SQL fix.")
-      }
+      setStatus("Error fetching users. Check console (F12).")
     }
   }
 
