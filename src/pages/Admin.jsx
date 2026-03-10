@@ -22,8 +22,10 @@ export default function Admin() {
   const [newUser, setNewUser] = useState({ email: '', password: '', role: 'employee', full_name: '' })
   const [showAddUser, setShowAddUser] = useState(false)
   const [status, setStatus] = useState('')
+  const [myProfile, setMyProfile] = useState(null)
 
   useEffect(() => {
+    fetchMyProfile()
     if (activeTab === 'users') {
       fetchUsers()
       fetchManagers()
@@ -32,6 +34,15 @@ export default function Admin() {
       fetchLocationHistory()
     }
   }, [activeTab])
+
+  async function fetchMyProfile() {
+    if (!supabase) return
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) {
+      const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single()
+      setMyProfile(data)
+    }
+  }
 
   async function fetchManagers() {
     if (!supabase) return
@@ -121,6 +132,7 @@ export default function Admin() {
         value={row.role} 
         onChange={(e) => updateUserConfig(row.id, 'role', e.target.value)}
         className="text-xs border rounded p-1"
+        disabled={myProfile?.role !== 'admin' && myProfile?.role !== 'owner'}
       >
         <option value="admin">Admin</option>
         <option value="manager">Manager</option>
@@ -137,7 +149,7 @@ export default function Admin() {
         value={row.reporting_manager_id || ''} 
         onChange={(e) => updateUserConfig(row.id, 'reporting_manager_id', e.target.value || null)}
         className="text-xs border rounded p-1 bg-white"
-        disabled={row.role === 'manager' || row.role === 'owner' || row.role === 'admin'}
+        disabled={myProfile?.role !== 'admin' && myProfile?.role !== 'owner'}
       >
         <option value="">- None -</option>
         {managers.map(m => (
@@ -150,6 +162,7 @@ export default function Admin() {
         value={row.attendance_mode} 
         onChange={(e) => updateUserConfig(row.id, 'attendance_mode', e.target.value)}
         className="text-xs border rounded p-1"
+        disabled={(row.role === 'admin' || row.role === 'hr') && myProfile?.role !== 'owner'}
       >
         <option value="strict">Strict</option>
         <option value="flexible">Flexible</option>
@@ -161,13 +174,15 @@ export default function Admin() {
           placeholder="Lat" 
           defaultValue={row.assigned_lat} 
           onBlur={(e) => updateUserConfig(row.id, 'assigned_lat', parseFloat(e.target.value))}
-          className="w-12 text-[10px] border p-1"
+          className="w-16 text-[10px] border p-1 rounded"
+          disabled={(row.role === 'admin' || row.role === 'hr') && myProfile?.role !== 'owner'}
         />
         <input 
           placeholder="Lng" 
           defaultValue={row.assigned_lng} 
           onBlur={(e) => updateUserConfig(row.id, 'assigned_lng', parseFloat(e.target.value))}
-          className="w-12 text-[10px] border p-1"
+          className="w-16 text-[10px] border p-1 rounded"
+          disabled={(row.role === 'admin' || row.role === 'hr') && myProfile?.role !== 'owner'}
         />
       </div>
     )}
