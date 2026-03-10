@@ -79,46 +79,91 @@ export default function AttendanceStrict() {
 
   async function checkIn() {
     if (!pos || !selfie) {
-      alert("Location or Selfie missing!")
-      return
+      alert("Location or Selfie missing!");
+      return;
     }
-    const now = new Date()
-    const late = now.getHours() > 9 || (now.getHours() === 9 && now.getMinutes() > 45)
-    setStatus("Submitting...")
-    
+    const now = new Date();
+    const late = now.getHours() > 9 || (now.getHours() === 9 && now.getMinutes() > 45);
+    setStatus("Submitting...");
+
     if (supabase) {
-      const { data: { user } } = await supabase.auth.getUser()
-      const { error } = await supabase.from("attendance").insert({
-        user_id: user.id,
-        timestamp: now.toISOString(),
-        lat: pos.lat,
-        lng: pos.lng,
-        is_late: late,
-        status: "pending", 
-        selfie_base64: selfie
-      })
-      
-      if (!error) {
-        setStatus(late ? "Check-in successful (Late - Pending Approval)" : "Check-in successful (Pending Approval)")
-        setSelfie(null)
-      } else {
-        setStatus("Error: " + error.message)
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        
+        // 1. Upload Selfie to Storage
+        const fileExt = 'jpg';
+        const fileName = `${user.id}-${now.toISOString()}.${fileExt}`;
+        const filePath = `${user.id}/${fileName}`;
+        
+        const base64 = selfie.split(',')[1];
+        const { error: uploadError } = await supabase.storage
+          .from('selfies')
+          .upload(filePath, Buffer.from(base64, 'base64'), {
+            contentType: 'image/jpeg'
+          });
+
+        if (uploadError) throw uploadError;
+
+        // 2. Get Public URL
+        const { data: { publicUrl } } = supabase.storage.from('selfies').getPublicUrl(filePath);
+
+        // 3. Insert into attendance table using the correct schema
+        const { error: insertError } = await supabase.from("attendance").insert({
+          profile_id: user.id,
+          check_in_time: now.toISOString(),
+          lat: pos.lat,
+          lng: pos.lng,
+          is_late: late,
+          status: "pending",
+          check_in_selfie_url: publicUrl // Using the new column, not selfie_base64
+        });
+
+        if (insertError) throw insertError;
+
+        setStatus(late ? "Check-in successful (Late - Pending Approval)" : "Check-in successful (Pending Approval)");
+        setSelfie(null);
+      } catch (error) {
+        console.error("Check-in failed:", error);
+        // The user-facing error now correctly references the column name from the DB
+        if (error.message.includes('column "lat"')) {
+            setStatus("Error: Database schema is outdated. Please contact admin.");
+        } else {
+            setStatus("Error: " + error.message);
+        }
       }
     }
   }
 
   useEffect(() => {
     if (!pos || !profile) return
-    
+
+    console.log("--- ATTENDANCE DEBUGGER ---");
+    console.log("User Profile:", profile);
+    console.log("Current GPS Position (pos):", pos);
+
     if (profile.attendance_mode === 'flexible') {
+      console.log("Mode: FLEXIBLE. Allowing check-in automatically.");
       setCanCheckIn(true)
       return
     }
 
+    console.log("Mode: STRICT. Calculating distance...");
     const assigned = { lat: profile.assigned_lat || 0, lng: profile.assigned_lng || 0 }
+    console.log("Assigned Location:", assigned);
+
+    if (!profile.assigned_lat || !profile.assigned_lng) {
+        console.error("CRITICAL: Assigned location (lat/lng) is not set for this user in 'strict' mode.");
+    }
+
     const dist = distanceMeters(pos, assigned)
     setDistance(dist)
-    setCanCheckIn(dist <= 100) 
+    console.log(`Calculated Distance: ${dist} meters`);
+
+    const isWithinRange = dist <= 100;
+    setCanCheckIn(isWithinRange)
+    console.log(`Is within 100m range? ${isWithinRange}`);
+    console.log("---------------------------");
+
   }, [pos, profile])
 
   const mapsLink = profile?.assigned_lat ? `https://www.google.com/maps?q=${profile.assigned_lat},${profile.assigned_lng}` : null
@@ -205,8 +250,16 @@ export default function AttendanceStrict() {
                 : "bg-gray-200 text-gray-400 cursor-not-allowed"
               }`}
             >
-              {canCheckIn ? "CHECK-IN NOW" : "OUT OF RANGE"}
+              {canCheckIn || profile?.attendance_mode === 'flexible' ? "CHECK-IN NOW" : "OUT OF RANGE"}
             </button>
+            {profile?.attendance_mode === 'strict' && !canCheckIn && mapsLink && (
+                 <div className="mt-2 text-center">
+                    <a href={mapsLink} target="_blank" rel="noreferrer" className="text-sm text-blue-600 underline">
+                        You are out of range. View your assigned location on Google Maps.
+                    </a>
+                    <p className="text-xs mt-1 text-gray-500">Current distance: {Math.round(distance)} meters from target.</p>
+                 </div>
+            )}
             <p className="mt-3 text-[10px] text-center text-gray-400 italic">
               *Attendance will be sent to Manager for approval.
             </p>

@@ -17,29 +17,122 @@ import {
 export default function Admin() {
   const [activeTab, setActiveTab] = useState('dashboard')
   const [users, setUsers] = useState([])
+  const [managers, setManagers] = useState([])
   const [monitoring, setMonitoring] = useState([])
+  const [newUser, setNewUser] = useState({ email: '', password: '', role: 'employee', full_name: '' })
+  const [showAddUser, setShowAddUser] = useState(false)
+  const [status, setStatus] = useState('')
 
   useEffect(() => {
-    if (activeTab === 'users') fetchUsers()
+    if (activeTab === 'users') {
+      fetchUsers()
+      fetchManagers()
+    }
     if (activeTab === 'live') fetchLiveLocation()
   }, [activeTab])
 
+  async function fetchManagers() {
+    if (!supabase) return
+    const { data } = await supabase.from('profiles').select('id, full_name').eq('role', 'manager')
+    setManagers(data || [])
+  }
+
+  async function handleAddUser(e) {
+    e.preventDefault()
+    if (!supabase) return
+    setStatus('Adding user...')
+
+    // 1. Create user in auth
+    const { data: { user }, error: signUpError } = await supabase.auth.signUp({
+      email: newUser.email,
+      password: newUser.password,
+    })
+
+    if (signUpError) {
+      setStatus(`Error: ${signUpError.message}`)
+      return
+    }
+
+    // 2. Add profile entry
+    if (user) {
+      const { error: profileError } = await supabase.from('profiles').update({
+        full_name: newUser.full_name,
+        role: newUser.role
+      }).eq('id', user.id)
+
+      if (profileError) {
+        setStatus(`Error creating profile: ${profileError.message}`)
+      } else {
+        setStatus('User added successfully!')
+        setNewUser({ email: '', password: '', role: 'employee', full_name: '' })
+        setShowAddUser(false)
+        fetchUsers() // Refresh list
+      }
+    } else {
+        setStatus('Error: User created but profile could not be linked.')
+    }
+  }
+
   async function fetchUsers() {
     if (!supabase) return
-    const { data } = await supabase.from('profiles').select('*')
-    setUsers(data || [])
+    try {
+      const { data, error } = await supabase.from('profiles').select('*')
+      if (error) throw error
+      setUsers(data || [])
+    } catch (err) {
+      console.error('Error fetching users:', err.message)
+      // If 500 error, we show a better error message
+      if (err.message.includes('500')) {
+        setStatus("Server Error: Database policies are circular. Please run the SQL fix.")
+      }
+    }
   }
 
-  async function fetchLiveLocation() {
+  async function fetchManagers() {
     if (!supabase) return
-    const { data } = await supabase.from('location_logs').select('*, profiles(full_name)').order('recorded_at', { ascending: false }).limit(20)
-    setMonitoring(data || [])
+    const { data } = await supabase.from('profiles').select('id, full_name').eq('role', 'manager')
+    setManagers(data || [])
   }
 
-  async function updateUserConfig(id, field, value) {
+  async function handleAddUser(e) {
+    e.preventDefault()
     if (!supabase) return
-    await supabase.from('profiles').update({ [field]: value }).eq('id', id)
-    fetchUsers()
+    setStatus('Processing...')
+
+    try {
+      // 1. Create user in auth (In a real app, you'd use a service role or invite)
+      // For this MVP, we create an account. Note: This requires Supabase Auth settings to allow this.
+      const { data: { user }, error: signUpError } = await supabase.auth.signUp({
+        email: newUser.email,
+        password: newUser.password,
+        options: {
+          data: {
+            full_name: newUser.full_name,
+            role: newUser.role
+          }
+        }
+      })
+
+      if (signUpError) throw signUpError
+
+      if (user) {
+        // 2. Profile entry should be auto-created by trigger, but we update it just in case
+        const { error: profileError } = await supabase.from('profiles').update({
+          full_name: newUser.full_name,
+          role: newUser.role,
+          attendance_mode: 'strict'
+        }).eq('id', user.id)
+
+        if (profileError) throw profileError
+
+        setStatus('User added! Note: User must verify email to login.')
+        setNewUser({ email: '', password: '', role: 'employee', full_name: '' })
+        setShowAddUser(false)
+        fetchUsers()
+      }
+    } catch (err) {
+      setStatus(`Error: ${err.message}`)
+    }
   }
 
   const userColumns = [
@@ -55,6 +148,22 @@ export default function Admin() {
         <option value="hr">HR</option>
         <option value="employee">Employee</option>
         <option value="owner">Owner</option>
+        <option value="sales">Sales</option>
+        <option value="service">Service</option>
+        <option value="store">Store</option>
+      </select>
+    )},
+    { header: "Manager", cell: (row) => (
+      <select 
+        value={row.reporting_manager_id || ''} 
+        onChange={(e) => updateUserConfig(row.id, 'reporting_manager_id', e.target.value || null)}
+        className="text-xs border rounded p-1 bg-white"
+        disabled={row.role === 'manager' || row.role === 'owner' || row.role === 'admin'}
+      >
+        <option value="">- None -</option>
+        {managers.map(m => (
+          <option key={m.id} value={m.id}>{m.full_name}</option>
+        ))}
       </select>
     )},
     { header: "Mode", cell: (row) => (
@@ -114,7 +223,40 @@ export default function Admin() {
 
       {activeTab === 'users' && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
-          <h2 className="text-lg font-bold text-navy mb-4">User Access Control</h2>
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-lg font-bold text-navy">User Access Control</h2>
+            <button 
+              onClick={() => setShowAddUser(!showAddUser)}
+              className="bg-navy text-white px-3 py-1 rounded-md text-sm font-semibold"
+            >
+              {showAddUser ? 'Cancel' : '+ Add User'}
+            </button>
+          </div>
+
+          {showAddUser && (
+            <form onSubmit={handleAddUser} className="bg-gray-50 p-4 rounded-lg mb-4 border space-y-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <input type="text" placeholder="Full Name" value={newUser.full_name} onChange={e => setNewUser({...newUser, full_name: e.target.value})} className="p-2 border rounded" required />
+                <input type="email" placeholder="Email" value={newUser.email} onChange={e => setNewUser({...newUser, email: e.target.value})} className="p-2 border rounded" required />
+                <input type="password" placeholder="Password" value={newUser.password} onChange={e => setNewUser({...newUser, password: e.target.value})} className="p-2 border rounded" required />
+                <select value={newUser.role} onChange={e => setNewUser({...newUser, role: e.target.value})} className="p-2 border rounded bg-white">
+                  <option value="employee">Employee</option>
+                  <option value="manager">Manager</option>
+                  <option value="hr">HR</option>
+                  <option value="admin">Admin</option>
+                  <option value="owner">Owner</option>
+                  <option value="sales">Sales</option>
+                  <option value="service">Service</option>
+                  <option value="store">Store</option>
+                </select>
+              </div>
+              <div className="flex items-center gap-4">
+                  <button type="submit" className="bg-gold text-white font-bold px-4 py-2 rounded-lg">Save User</button>
+                  <p className="text-sm text-gray-600 font-medium">{status}</p>
+              </div>
+            </form>
+          )}
+
           <DataTable columns={userColumns} data={users} />
         </div>
       )}
