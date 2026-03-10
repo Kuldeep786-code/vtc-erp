@@ -31,7 +31,17 @@ export default function AttendanceStrict() {
     fetchProfile()
     fetchTodayAttendance()
     requestPermissions()
-    // ... existing watchPosition logic
+    
+    const watchId = navigator.geolocation.watchPosition(
+      p => {
+        const coords = { lat: p.coords.latitude, lng: p.coords.longitude }
+        setPos(coords)
+        logLocation(coords) // This was missing
+      },
+      err => console.error("Location error:", err),
+      { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+    )
+    return () => navigator.geolocation.clearWatch(watchId)
   }, [])
 
   async function fetchTodayAttendance() {
@@ -68,7 +78,33 @@ export default function AttendanceStrict() {
     if (!error) {
       setStatus(`Check-out successful. Total Hours: ${diffHrs}. ${diffHrs < 9 ? 'Half-day marked.' : ''}`);
       fetchTodayAttendance();
+    } else {
+      setStatus(`Error: ${error.message}`)
     }
+  }
+
+  // Helper function to upload selfie and get URL
+  async function uploadSelfie(type) {
+    if (!selfie) return null;
+    const { data: { user } } = await supabase.auth.getUser();
+    const now = new Date();
+    const fileName = `${user.id}-${type}-${now.toISOString()}.jpg`;
+    const filePath = `${user.id}/${fileName}`;
+
+    const base64Data = selfie.split(',')[1];
+    const byteCharacters = atob(base64Data);
+    const byteNumbers = new Array(byteCharacters.length);
+    for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+    }
+    const byteArray = new Uint8Array(byteNumbers);
+    const blob = new Blob([byteArray], { type: 'image/jpeg' });
+
+    const { error } = await supabase.storage.from('selfies').upload(filePath, blob, { upsert: true });
+    if (error) throw error;
+
+    const { data } = supabase.storage.from('selfies').getPublicUrl(filePath);
+    return data.publicUrl;
   }
 
   async function fetchProfile() {

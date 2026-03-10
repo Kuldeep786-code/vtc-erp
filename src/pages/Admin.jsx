@@ -24,6 +24,8 @@ export default function Admin() {
   const [status, setStatus] = useState('')
   const [myProfile, setMyProfile] = useState(null)
 
+  const [attendanceLogs, setAttendanceLogs] = useState([])
+
   useEffect(() => {
     fetchMyProfile()
     if (activeTab === 'users') {
@@ -33,7 +35,26 @@ export default function Admin() {
     if (activeTab === 'live') {
       fetchLocationHistory()
     }
+    if (activeTab === 'attendance') {
+      fetchAttendanceLogs()
+    }
   }, [activeTab])
+
+  async function fetchAttendanceLogs() {
+    if (!supabase) return
+    const { data, error } = await supabase.from('attendance').select('*, profiles(full_name)').order('check_in_time', { ascending: false })
+    if (error) {
+      console.error("Error fetching attendance logs:", error)
+    } else {
+      setAttendanceLogs(data || [])
+    }
+  }
+
+  async function approveAttendance(id, status) {
+    if (!supabase) return
+    await supabase.from('attendance').update({ approval_status: status }).eq('id', id)
+    fetchAttendanceLogs()
+  }
 
   async function fetchMyProfile() {
     if (!supabase) return
@@ -204,7 +225,7 @@ export default function Admin() {
   return (
     <div className="space-y-6 p-4">
       <div className="flex gap-4 border-b border-gray-200 mb-4">
-        {['dashboard', 'users', 'live'].map(t => (
+        {['dashboard', 'users', 'attendance', 'live'].map(t => (
           <button 
             key={t}
             onClick={() => setActiveTab(t)}
@@ -252,6 +273,45 @@ export default function Admin() {
           )}
 
           <DataTable columns={userColumns} data={users} />
+        </div>
+      )}
+
+      {activeTab === 'attendance' && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+            <h2 className="text-lg font-bold text-navy mb-4">Attendance Approval</h2>
+            <div className="overflow-x-auto">
+                <table className="w-full text-sm text-left">
+                    <thead className="bg-gray-50 text-gray-600">
+                        <tr>
+                            <th className="p-2">Employee</th>
+                            <th className="p-2">Check In</th>
+                            <th className="p-2">Check Out</th>
+                            <th className="p-2">Hours</th>
+                            <th className="p-2">Status</th>
+                            <th className="p-2">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {attendanceLogs.map(log => (
+                            <tr key={log.id} className="border-b">
+                                <td className="p-2 font-semibold">{log.profiles?.full_name}</td>
+                                <td className="p-2">{new Date(log.check_in_time).toLocaleString()}</td>
+                                <td className="p-2">{log.check_out_time ? new Date(log.check_out_time).toLocaleString() : '-'}</td>
+                                <td className="p-2">{log.total_hours || '-'}</td>
+                                <td className="p-2 capitalize font-medium"><span className={`px-2 py-1 rounded-full text-xs ${log.approval_status === 'approved' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>{log.approval_status}</span></td>
+                                <td className="p-2">
+                                    {log.approval_status === 'pending' && (
+                                        <div className="flex gap-2">
+                                            <button onClick={() => approveAttendance(log.id, 'approved')} className="bg-green-500 text-white px-2 py-1 text-xs rounded">Approve</button>
+                                            <button onClick={() => approveAttendance(log.id, 'rejected')} className="bg-red-500 text-white px-2 py-1 text-xs rounded">Reject</button>
+                                        </div>
+                                    )}
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
         </div>
       )}
 
