@@ -58,12 +58,23 @@ export default function AttendanceStrict() {
   async function fetchTodayAttendance() {
     if (!supabase) return
     const { data: { user } } = await supabase.auth.getUser()
-    const today = new Date().toISOString().split('T')[0]
-    const { data } = await supabase.from('attendance')
+    
+    // Create a date range for "Today" in local time
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date();
+    endOfDay.setHours(23, 59, 59, 999);
+
+    const { data, error } = await supabase.from('attendance')
       .select('*')
       .eq('profile_id', user.id)
-      .gte('check_in_time', today)
-      .single()
+      .gte('check_in_time', startOfDay.toISOString())
+      .lte('check_in_time', endOfDay.toISOString())
+      .maybeSingle()
+      
+    if (error) {
+      console.error("Error fetching today attendance:", error)
+    }
     setTodayAttendance(data)
   }
 
