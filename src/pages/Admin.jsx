@@ -42,11 +42,12 @@ export default function Admin() {
 
   async function fetchAttendanceLogs() {
     if (!supabase) return
-    const { data, error } = await supabase.from('attendance').select('*, profiles(full_name)').order('check_in_time', { ascending: false })
-    if (error) {
-      console.error("Error fetching attendance logs:", error)
-    } else {
+    try {
+      const { data, error } = await supabase.from('attendance').select('*, profiles(full_name)').order('check_in_time', { ascending: false })
+      if (error) throw error
       setAttendanceLogs(data || [])
+    } catch (err) {
+      console.error("Admin: Error fetching attendance logs:", err.message)
     }
   }
 
@@ -110,12 +111,14 @@ export default function Admin() {
   async function fetchUsers() {
     if (!supabase) return
     try {
+      console.log("Admin: Fetching users list...");
       const { data, error } = await supabase.from('profiles').select('*')
       if (error) throw error
       setUsers(data || [])
+      setStatus("") 
     } catch (err) {
-      console.error('Error fetching users:', err.message)
-      setStatus("Error loading users. Please ensure SQL Master Script is run.")
+      console.error('Admin: Error fetching users:', err.message)
+      setStatus("Database Connection Error. Please ensure SQL Step 1 is run correctly.")
     }
   }
 
