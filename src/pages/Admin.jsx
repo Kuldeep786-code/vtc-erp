@@ -26,6 +26,19 @@ export default function Admin() {
 
   const [attendanceLogs, setAttendanceLogs] = useState([])
 
+  const handleExport = () => {
+    const headers = "Employee,Role,Check In,Check Out,Total Hours,Status\n";
+    const rows = attendanceLogs.map(log => 
+      `${log.profiles?.full_name},${log.profiles?.role},${log.check_in_time},${log.check_out_time || 'N/A'},${log.total_hours || 0},${log.approval_status}`
+    ).join("\n");
+    const blob = new Blob([headers + rows], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `VTC_Attendance_${new Date().toLocaleDateString()}.csv`;
+    a.click();
+  };
+
   useEffect(() => {
     fetchMyProfile()
     if (activeTab === 'users') {
@@ -279,32 +292,61 @@ export default function Admin() {
 
       {activeTab === 'attendance' && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
-            <h2 className="text-lg font-bold text-navy mb-4">Attendance Approval</h2>
+            <div className="flex justify-between items-center mb-6">
+                <h2 className="text-lg font-bold text-navy">Global Attendance Log</h2>
+                <div className="flex gap-2">
+                    <button onClick={handleExport} className="bg-white border px-3 py-1 rounded text-xs flex items-center gap-2">
+                        <ArrowDownTrayIcon className="w-3 h-3" /> Export Excel
+                    </button>
+                </div>
+            </div>
             <div className="overflow-x-auto">
                 <table className="w-full text-sm text-left">
-                    <thead className="bg-gray-50 text-gray-600">
+                    <thead className="bg-gray-50 text-gray-600 font-bold text-[10px] uppercase tracking-widest">
                         <tr>
-                            <th className="p-2">Employee</th>
-                            <th className="p-2">Check In</th>
-                            <th className="p-2">Check Out</th>
-                            <th className="p-2">Hours</th>
-                            <th className="p-2">Status</th>
-                            <th className="p-2">Actions</th>
+                            <th className="p-3">Employee</th>
+                            <th className="p-3">Check In</th>
+                            <th className="p-3">Check Out</th>
+                            <th className="p-3">Selfies</th>
+                            <th className="p-3">Total Hours</th>
+                            <th className="p-3">Status</th>
+                            <th className="p-3 text-right">Action</th>
                         </tr>
                     </thead>
-                    <tbody>
+                    <tbody className="divide-y">
                         {attendanceLogs.map(log => (
-                            <tr key={log.id} className="border-b">
-                                <td className="p-2 font-semibold">{log.profiles?.full_name}</td>
-                                <td className="p-2">{new Date(log.check_in_time).toLocaleString()}</td>
-                                <td className="p-2">{log.check_out_time ? new Date(log.check_out_time).toLocaleString() : '-'}</td>
-                                <td className="p-2">{log.total_hours || '-'}</td>
-                                <td className="p-2 capitalize font-medium"><span className={`px-2 py-1 rounded-full text-xs ${log.approval_status === 'approved' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>{log.approval_status}</span></td>
-                                <td className="p-2">
+                            <tr key={log.id} className="hover:bg-gray-50">
+                                <td className="p-3">
+                                    <div className="font-bold text-navy">{log.profiles?.full_name}</div>
+                                    <div className="text-[10px] text-gray-400 font-bold uppercase tracking-tighter">{log.profiles?.role}</div>
+                                </td>
+                                <td className="p-3">
+                                    <div className="font-black text-xs">{new Date(log.check_in_time).toLocaleTimeString()}</div>
+                                    <div className="text-[9px] text-gray-500 font-bold">{new Date(log.check_in_time).toLocaleDateString()}</div>
+                                </td>
+                                <td className="p-3 text-xs">
+                                    {log.check_out_time ? (
+                                        <>
+                                            <div className="font-black">{new Date(log.check_out_time).toLocaleTimeString()}</div>
+                                            <div className="text-[9px] text-gray-500 font-bold">{new Date(log.check_out_time).toLocaleDateString()}</div>
+                                        </>
+                                    ) : <span className="text-red-500 font-black animate-pulse">ON DUTY</span>}
+                                </td>
+                                <td className="p-3 flex gap-1">
+                                    <img src={log.check_in_selfie_url} className="h-10 w-10 rounded border object-cover" alt="in" />
+                                    {log.check_out_selfie_url && <img src={log.check_out_selfie_url} className="h-10 w-10 rounded border object-cover" alt="out" />}
+                                </td>
+                                <td className="p-3 font-black text-navy">{log.total_hours || '-'}h</td>
+                                <td className="p-3">
+                                    <span className={`px-2 py-1 rounded-full text-[10px] font-black uppercase ${
+                                        log.approval_status === 'approved' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
+                                    }`}>{log.approval_status}</span>
+                                </td>
+                                <td className="p-3 text-right">
                                     {log.approval_status === 'pending' && (
-                                        <div className="flex gap-2">
-                                            <button onClick={() => approveAttendance(log.id, 'approved')} className="bg-green-500 text-white px-2 py-1 text-xs rounded">Approve</button>
-                                            <button onClick={() => approveAttendance(log.id, 'rejected')} className="bg-red-500 text-white px-2 py-1 text-xs rounded">Reject</button>
+                                        <div className="flex gap-2 justify-end">
+                                            <button onClick={() => approveAttendance(log.id, 'approved')} className="bg-green-600 text-white px-3 py-1 text-[10px] font-black rounded-lg shadow-sm">APPROVE</button>
+                                            <button onClick={() => approveAttendance(log.id, 'rejected')} className="bg-red-600 text-white px-3 py-1 text-[10px] font-black rounded-lg shadow-sm">REJECT</button>
                                         </div>
                                     )}
                                 </td>
