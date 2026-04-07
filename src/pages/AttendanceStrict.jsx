@@ -31,12 +31,23 @@ export default function AttendanceStrict() {
     fetchProfile()
     fetchTodayAttendance()
     requestPermissions()
+
+    // Fix: Get initial position immediately to avoid "Searching..." delay
+    navigator.geolocation.getCurrentPosition(
+      p => {
+        const coords = { lat: p.coords.latitude, lng: p.coords.longitude }
+        setPos(coords)
+        logLocation(coords)
+      },
+      err => console.error("Initial GPS error:", err),
+      { enableHighAccuracy: true }
+    )
     
     const watchId = navigator.geolocation.watchPosition(
       p => {
         const coords = { lat: p.coords.latitude, lng: p.coords.longitude }
         setPos(coords)
-        logLocation(coords) // This was missing
+        logLocation(coords)
       },
       err => console.error("Location error:", err),
       { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
@@ -62,24 +73,27 @@ export default function AttendanceStrict() {
         return;
     }
     setStatus("Checking out...");
-    const now = new Date();
-    const checkInTime = new Date(todayAttendance.check_in_time);
-    const diffMs = now - checkInTime;
-    const diffHrs = (diffMs / (1000 * 60 * 60)).toFixed(2);
+    try {
+        const now = new Date();
+        const checkInTime = new Date(todayAttendance.check_in_time);
+        const diffHrs = ((now - checkInTime) / (1000 * 60 * 60)).toFixed(2);
+        const publicUrl = await uploadSelfie('checkout');
 
-    const { error } = await supabase.from('attendance')
-      .update({ 
-        check_out_time: now.toISOString(),
-        total_hours: diffHrs,
-        check_out_selfie_url: await uploadSelfie('checkout') // Helper function needed
-      })
-      .eq('id', todayAttendance.id);
+        const { error } = await supabase.from('attendance')
+          .update({ 
+            check_out_time: now.toISOString(),
+            total_hours: diffHrs,
+            check_out_selfie_url: publicUrl
+          })
+          .eq('id', todayAttendance.id);
 
-    if (!error) {
-      setStatus(`Check-out successful. Total Hours: ${diffHrs}. ${diffHrs < 9 ? 'Half-day marked.' : ''}`);
-      fetchTodayAttendance();
-    } else {
-      setStatus(`Error: ${error.message}`)
+        if (error) throw error;
+
+        setStatus(`Check-out successful. Total Hours: ${diffHrs}`);
+        setSelfie(null);
+        fetchTodayAttendance();
+    } catch (err) {
+        setStatus(`Error: ${err.message}`);
     }
   }
 
@@ -152,38 +166,10 @@ export default function AttendanceStrict() {
     const late = now.getHours() > 9 || (now.getHours() === 9 && now.getMinutes() > 45);
     setStatus("Submitting...");
 
-    if (supabase) {
-      try {
+    try {
         const { data: { user } } = await supabase.auth.getUser();
-        
-        // 1. Upload Selfie to Storage (Browser-compatible way)
-        const fileExt = 'jpg';
-        const fileName = `${user.id}-${now.toISOString()}.${fileExt}`;
-        const filePath = `${user.id}/${fileName}`;
-        
-        // Convert base64 to Blob
-        const base64Data = selfie.split(',')[1];
-        const byteCharacters = atob(base64Data);
-        const byteNumbers = new Array(byteCharacters.length);
-        for (let i = 0; i < byteCharacters.length; i++) {
-            byteNumbers[i] = byteCharacters.charCodeAt(i);
-        }
-        const byteArray = new Uint8Array(byteNumbers);
-        const blob = new Blob([byteArray], { type: 'image/jpeg' });
+        const publicUrl = await uploadSelfie('checkin');
 
-        const { error: uploadError } = await supabase.storage
-          .from('selfies')
-          .upload(filePath, blob, {
-            contentType: 'image/jpeg',
-            upsert: true
-          });
-
-        if (uploadError) throw uploadError;
-
-        // 2. Get Public URL
-        const { data: { publicUrl } } = supabase.storage.from('selfies').getPublicUrl(filePath);
-
-        // 3. Insert into attendance table using the correct schema
         const { error: insertError } = await supabase.from("attendance").insert({
           profile_id: user.id,
           check_in_time: now.toISOString(),
@@ -191,23 +177,17 @@ export default function AttendanceStrict() {
           lng: pos.lng,
           is_late: late,
           status: "pending",
-          check_in_selfie_url: publicUrl // Using the new column, not selfie_base64
+          check_in_selfie_url: publicUrl
         });
 
         if (insertError) throw insertError;
 
         setStatus(late ? "Check-in successful (Late - Pending Approval)" : "Check-in successful (Pending Approval)");
         setSelfie(null);
-        fetchTodayAttendance(); // Refresh state to show Check-out button
-      } catch (error) {
+        fetchTodayAttendance();
+    } catch (error) {
         console.error("Check-in failed:", error);
-        // The user-facing error now correctly references the column name from the DB
-        if (error.message.includes('column "lat"')) {
-            setStatus("Error: Database schema is outdated. Please contact admin.");
-        } else {
-            setStatus("Error: " + error.message);
-        }
-      }
+        setStatus("Error: " + error.message);
     }
   }
 

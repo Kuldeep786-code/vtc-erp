@@ -110,17 +110,12 @@ export default function Admin() {
   async function fetchUsers() {
     if (!supabase) return
     try {
-      console.log("Fetching all users...");
       const { data, error } = await supabase.from('profiles').select('*')
-      if (error) {
-          console.error("Supabase Error:", error.message);
-          throw error;
-      }
-      console.log("Users loaded:", data?.length);
+      if (error) throw error
       setUsers(data || [])
     } catch (err) {
       console.error('Error fetching users:', err.message)
-      setStatus("Error fetching users. Check console (F12).")
+      setStatus("Error loading users. Please ensure SQL Master Script is run.")
     }
   }
 
