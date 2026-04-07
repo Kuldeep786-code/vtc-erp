@@ -30,10 +30,9 @@ function Logo() {
 const links = [
   { to: "/dashboard", label: "Dashboard", roles: ['admin', 'manager', 'hr', 'sales', 'service', 'store', 'employee', 'owner'] },
   { to: "/admin", label: "User Management", roles: ['admin', 'owner'] },
-  { to: "/attendance-logs", label: "Attendance Approvals", roles: ['admin', 'manager', 'hr', 'owner'] },
   { to: "/sales-leads", label: "Sales & Leads", roles: ['admin', 'manager', 'sales', 'owner'] },
-  { to: "/sales-workflow", label: "Sales Workflow", roles: ['admin', 'sales', 'owner'] },
   { to: "/amc", label: "AMC & Services", roles: ['admin', 'manager', 'service', 'owner'] },
+  { to: "/sales-workflow", label: "Sales Workflow", roles: ['admin', 'sales', 'owner'] },
   { to: "/payroll", label: "Payroll", roles: ['admin', 'hr', 'owner'] },
   { to: "/store", label: "Store & Inventory", roles: ['admin', 'store', 'owner'] },
   { to: "/attendance", label: "My Attendance", roles: ['employee', 'sales', 'service', 'manager', 'hr', 'admin', 'owner'] }
